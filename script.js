@@ -4,6 +4,140 @@
  * Refactored with high-end visual standards.
  */
 
+/**
+ * UI Focus Manager for Keyboard Navigation
+ */
+class FocusManager {
+    constructor() {
+        this.currentContext = null;
+        this.elements = [];
+        this.currentIndex = -1;
+        this.focusClass = 'keyboard-focused';
+    }
+
+    /**
+     * Rule 1: Hard Reset State
+     * Resets index and clears all classes from elements
+     */
+    reset() {
+        this.clearAllFocus();
+        this.currentIndex = -1;
+        this.elements = [];
+        this.currentContext = null;
+    }
+
+    /**
+     * Rule 3: Global cleanup of focus class
+     */
+    clearAllFocus() {
+        document.querySelectorAll(`.${this.focusClass}`).forEach(el => {
+            el.classList.remove(this.focusClass);
+        });
+    }
+
+    /**
+     * Rule 2: Dynamic Collection
+     * Re-scans container for visible buttons every time context is set
+     */
+    setContext(containerId) {
+        // Rule 1: Always start with a clean slate
+        this.reset();
+        
+        if (!containerId) return;
+
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        this.currentContext = containerId;
+        this.refresh();
+    }
+
+    /**
+     * Refresh the list of active elements in the current context
+     */
+    refresh() {
+        if (!this.currentContext) return;
+        
+        const container = document.getElementById(this.currentContext);
+        if (!container) return;
+
+        // Rule 2: Find all visible and non-disabled buttons
+        this.elements = Array.from(container.querySelectorAll('button:not([disabled]):not(.hidden)'))
+            .filter(btn => {
+                const style = window.getComputedStyle(btn);
+                return style.display !== 'none';
+            });
+
+        if (this.elements.length > 0) {
+            // Rule 1: Reset to first button
+            this.focus(0);
+        } else {
+            this.currentIndex = -1;
+        }
+
+        // Sync with mouse hover
+        this.elements.forEach((el) => {
+            if (!el._hasFocusSync) {
+                el.addEventListener('mouseenter', () => {
+                    if (this.elements.includes(el)) {
+                        this.focus(this.elements.indexOf(el));
+                    }
+                });
+                
+                // Rule 3: Clear keyboard focus on mouse click
+                el.addEventListener('mousedown', () => {
+                    this.clearAllFocus();
+                });
+
+                el._hasFocusSync = true;
+            }
+        });
+    }
+
+    focus(index) {
+        if (index < 0 || index >= this.elements.length) return;
+        
+        this.clearAllFocus(); // Ensure only one element has focus
+        this.currentIndex = index;
+        this.elements[this.currentIndex].classList.add(this.focusClass);
+    }
+
+    clearFocus() {
+        if (this.currentIndex >= 0 && this.elements[this.currentIndex]) {
+            this.elements[this.currentIndex].classList.remove(this.focusClass);
+        }
+    }
+
+    next() {
+        if (this.elements.length === 0) {
+            this.refresh(); // Attempt to recover if elements changed
+            if (this.elements.length === 0) return;
+        }
+        const nextIndex = (this.currentIndex + 1) % this.elements.length;
+        this.focus(nextIndex);
+    }
+
+    prev() {
+        if (this.elements.length === 0) {
+            this.refresh();
+            if (this.elements.length === 0) return;
+        }
+        const prevIndex = (this.currentIndex - 1 + this.elements.length) % this.elements.length;
+        this.focus(prevIndex);
+    }
+
+    activate() {
+        if (this.currentIndex >= 0 && this.elements[this.currentIndex]) {
+            // Visual feedback before click
+            this.elements[this.currentIndex].click();
+        }
+    }
+
+    isActive() {
+        return this.currentContext !== null && this.elements.length > 0;
+    }
+}
+
 class Particle {
     constructor(x, y, color, gridSize) {
         this.x = x;
@@ -110,11 +244,17 @@ class Game {
         this.isGameOver = false;
         this.isPaused = false;
         this.highScores = JSON.parse(localStorage.getItem('snake_highscores_v1')) || [];
+        
+        // UI Focus Management
+        this.focusManager = new FocusManager();
 
         this.init();
     }
 
     init() {
+        // Set initial focus context for main menu
+        this.focusManager.setContext('menu-screen');
+
         // DOM Elements for Stats
         this.inventoryPanel = document.getElementById('inventory-stats');
         // Event Listeners
@@ -122,7 +262,14 @@ class Game {
         document.getElementById('highscores-btn').addEventListener('click', () => this.showModal('highscores'));
         document.getElementById('close-highscores').addEventListener('click', () => this.hideModal('highscores'));
         document.getElementById('restart-btn').addEventListener('click', () => this.restartGame());
-        document.getElementById('main-menu-btn').addEventListener('click', () => this.transitionTo('menu'));
+        document.getElementById('main-menu-btn').addEventListener('click', () => {
+            this.transitionTo('menu');
+            
+            // Жесткий сброс клавиатурной навигации
+            document.activeElement.blur();
+            this.focusManager.currentIndex = 0;
+            document.querySelectorAll('.keyboard-focused').forEach(btn => btn.classList.remove('keyboard-focused'));
+        });
         
         this.pauseBtn.addEventListener('click', () => this.togglePause());
         this.resumeBtn.addEventListener('click', () => this.togglePause());
@@ -181,10 +328,12 @@ class Game {
             this.pauseOverlay.classList.add('active');
             this.pauseBtn.querySelector('.pause-icon').style.display = 'none';
             this.pauseBtn.querySelector('.play-icon').style.display = 'block';
+            this.focusManager.setContext('pause-overlay');
         } else {
             this.pauseOverlay.classList.remove('active');
             this.pauseBtn.querySelector('.pause-icon').style.display = 'block';
             this.pauseBtn.querySelector('.play-icon').style.display = 'none';
+            this.focusManager.setContext(null);
             // Resume the loop
             this.lastTime = performance.now();
             requestAnimationFrame((t) => this.gameLoop(t));
@@ -194,6 +343,7 @@ class Game {
     transitionTo(screen) {
         if (screen === 'game') {
             this.menuScreen.classList.remove('active');
+            this.focusManager.setContext(null);
             setTimeout(() => {
                 this.gameScreen.classList.add('active');
                 this.startGame();
@@ -203,6 +353,7 @@ class Game {
             this.gameScreen.classList.remove('active');
             setTimeout(() => {
                 this.menuScreen.classList.add('active');
+                this.focusManager.setContext('menu-screen');
             }, 400);
         }
     }
@@ -211,15 +362,26 @@ class Game {
         if (type === 'highscores') {
             this.renderHighscores();
             this.highscoresModal.classList.add('active');
+            this.focusManager.setContext('highscores-modal');
         } else if (type === 'gameover') {
             this.finalScoreEl.textContent = this.score;
             this.gameoverModal.classList.add('active');
+            this.focusManager.setContext('gameover-modal');
         }
     }
 
     hideModal(type) {
-        if (type === 'highscores') this.highscoresModal.classList.remove('active');
-        if (type === 'gameover') this.gameoverModal.classList.remove('active');
+        if (type === 'highscores') {
+            this.highscoresModal.classList.remove('active');
+            // Return focus to menu if it was the previous context
+            if (this.menuScreen.classList.contains('active')) {
+                this.focusManager.setContext('menu-screen');
+            }
+        }
+        if (type === 'gameover') {
+            this.gameoverModal.classList.remove('active');
+            // If we're going back to menu or restarting, context is handled elsewhere
+        }
     }
 
     hideAllModals() {
@@ -231,6 +393,7 @@ class Game {
 
     startGame() {
         this.resetState();
+        this.focusManager.setContext(null);
         this.lastTime = performance.now();
         requestAnimationFrame((t) => this.gameLoop(t));
     }
@@ -283,6 +446,42 @@ class Game {
     }
 
     handleInput(e) {
+        // UI Navigation handling
+        if (this.focusManager.isActive()) {
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                this.focusManager.prev();
+                return;
+            }
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                this.focusManager.next();
+                return;
+            }
+            if (e.key === 'Enter' || e.code === 'Space') {
+                e.preventDefault();
+                // If it's Space and we are in pause overlay, we want to resume
+                // But activate() will click the button, which is #resume-btn, so it works!
+                this.focusManager.activate();
+                return;
+            }
+            if (e.key === 'Tab') {
+                e.preventDefault(); // Disable Tab navigation for console-like experience
+                return;
+            }
+            // If it's a modal, we might want to close it with Escape
+            if (e.key === 'Escape') {
+                if (this.highscoresModal.classList.contains('active')) {
+                    this.hideModal('highscores');
+                    return;
+                }
+                if (this.isPaused) {
+                    this.togglePause();
+                    return;
+                }
+            }
+        }
+
         if (e.code === 'Space') {
             e.preventDefault();
             this.togglePause();
@@ -297,7 +496,7 @@ class Game {
         };
 
         if (keys[e.key]) {
-            if (this.isPaused) return; // Prevent movement while paused
+            if (this.isPaused || this.isGameOver) return; // Prevent movement while paused or game over
             const move = keys[e.key];
             // Prevent 180 degree turns
             if (move.x !== -this.direction.x && move.y !== -this.direction.y) {
