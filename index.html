@@ -42,14 +42,22 @@
         <section id="game-screen" class="screen">
             <div class="game-layout">
                 <header class="game-ui-top">
-                    <div class="ui-panel score-panel">
-                        <span class="ui-label">CURRENT_SCORE</span>
-                        <span id="current-score" class="ui-value">000</span>
+                    <div class="main-stats-group">
+                        <div class="ui-panel score-panel">
+                            <span class="ui-label">CURRENT_SCORE</span>
+                            <span id="current-score" class="ui-value">000</span>
+                        </div>
+                        <div class="ui-panel best-panel">
+                            <span class="ui-label">BEST_RECORD</span>
+                            <span id="best-score" class="ui-value">000</span>
+                        </div>
                     </div>
-                    <div class="ui-panel best-panel">
-                        <span class="ui-label">BEST_RECORD</span>
-                        <span id="best-score" class="ui-value">000</span>
+                    
+                    <div id="inventory-panel" class="inventory-container">
+                        <div class="ui-label inventory-title">COLLECTED_DATA</div>
+                        <div id="inventory-stats" class="inventory-grid"></div>
                     </div>
+
                     <button id="pause-btn" class="ui-icon-btn">
                         <svg class="pause-icon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
                         <svg class="play-icon" viewBox="0 0 24 24" style="display:none;"><path d="M8 5v14l11-7z"/></svg>

@@ -5,13 +5,14 @@
  */
 
 class Particle {
-    constructor(x, y, color) {
+    constructor(x, y, color, gridSize) {
         this.x = x;
         this.y = y;
         this.color = color;
-        this.size = Math.random() * 3 + 1;
-        this.speedX = (Math.random() - 0.5) * 15;
-        this.speedY = (Math.random() - 0.5) * 15;
+        this.gridSize = gridSize || 20;
+        this.size = Math.random() * (this.gridSize / 6) + 1;
+        this.speedX = (Math.random() - 0.5) * (this.gridSize * 0.75);
+        this.speedY = (Math.random() - 0.5) * (this.gridSize * 0.75);
         this.alpha = 1;
         this.decay = Math.random() * 0.03 + 0.02;
         this.rotation = Math.random() * Math.PI * 2;
@@ -33,7 +34,7 @@ class Particle {
         ctx.translate(this.x, this.y);
         ctx.rotate(this.rotation);
         ctx.globalAlpha = this.alpha;
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = this.gridSize / 2;
         ctx.shadowColor = this.color;
         ctx.fillStyle = this.color;
 
@@ -66,10 +67,16 @@ class Game {
         this.resumeBtn = document.getElementById('resume-btn');
 
         // Config
-        this.gridSize = 20;
-        this.tileCount = 20;
-        this.canvas.width = this.gridSize * this.tileCount;
-        this.canvas.height = this.gridSize * this.tileCount;
+        this.baseGridX = 50; // Target grid columns
+        this.baseGridY = 30; // Target grid rows
+        this.gridSize = 0;
+        this.tileCountX = 0;
+        this.tileCountY = 0;
+        
+        // High-DPI support
+        this.dpr = window.devicePixelRatio || 1;
+        
+        this.resizeCanvas();
 
         // Visual State
         this.particles = [];
@@ -98,6 +105,8 @@ class Game {
         this.direction = { x: 1, y: 0 };
         this.nextDirection = { x: 1, y: 0 };
         this.score = 0;
+        this.displayScore = 0; // For animated score
+        this.stats = {}; // Tracking eaten items: { id: count }
         this.isGameOver = false;
         this.isPaused = false;
         this.highScores = JSON.parse(localStorage.getItem('snake_highscores_v1')) || [];
@@ -106,6 +115,8 @@ class Game {
     }
 
     init() {
+        // DOM Elements for Stats
+        this.inventoryPanel = document.getElementById('inventory-stats');
         // Event Listeners
         document.getElementById('start-btn').addEventListener('click', () => this.transitionTo('game'));
         document.getElementById('highscores-btn').addEventListener('click', () => this.showModal('highscores'));
@@ -117,9 +128,46 @@ class Game {
         this.resumeBtn.addEventListener('click', () => this.togglePause());
         
         window.addEventListener('keydown', (e) => this.handleInput(e));
+        window.addEventListener('resize', () => this.handleResize());
         
         this.updateBestScoreDisplay();
         this.animateMenu();
+    }
+
+    handleResize() {
+        this.resizeCanvas();
+        // Redraw if paused to show changes
+        if (this.isPaused || this.isGameOver) {
+            this.draw(0);
+        }
+    }
+
+    resizeCanvas() {
+        const container = this.canvas.parentElement;
+        const rect = container.getBoundingClientRect();
+        
+        // Calculate physical dimensions for High-DPI
+        this.canvas.width = rect.width * this.dpr;
+        this.canvas.height = rect.height * this.dpr;
+        
+        // Set CSS dimensions
+        this.canvas.style.width = `${rect.width}px`;
+        this.canvas.style.height = `${rect.height}px`;
+        
+        // Update context scaling for High-DPI
+        this.ctx.scale(this.dpr, this.dpr);
+        
+        // Calculate logical grid
+        // We want a roughly 50x30 grid, but we should adjust it to keep cells square
+        const aspectRatio = rect.width / rect.height;
+        
+        // We'll fix tileCountY and calculate tileCountX to match aspect ratio
+        this.tileCountY = this.baseGridY;
+        this.gridSize = rect.height / this.tileCountY;
+        this.tileCountX = Math.floor(rect.width / this.gridSize);
+        
+        // Re-center the grid logic (optional, but good for visuals)
+        // Here we just use the calculated tileCountX and tileCountY
     }
 
     // --- Transitions & UI ---
@@ -193,14 +241,18 @@ class Game {
     }
 
     resetState() {
+        const startX = Math.floor(this.tileCountX / 2);
+        const startY = Math.floor(this.tileCountY / 2);
         this.snake = [
-            { x: 10, y: 10 },
-            { x: 9, y: 10 },
-            { x: 8, y: 10 }
+            { x: startX, y: startY },
+            { x: startX - 1, y: startY },
+            { x: startX - 2, y: startY }
         ];
         this.direction = { x: 1, y: 0 };
         this.nextDirection = { x: 1, y: 0 };
         this.score = 0;
+        this.displayScore = 0;
+        this.stats = {};
         this.moveInterval = 150;
         this.isGameOver = false;
         this.isPaused = false;
@@ -208,7 +260,8 @@ class Game {
         this.bonuses = [];
         this.floatingTexts = [];
         this.spawnFood();
-        this.updateScoreDisplay();
+        this.updateScoreDisplay(true); // Reset display score
+        this.clearInventory();
         
         // Ensure UI is reset
         this.pauseOverlay.classList.remove('active');
@@ -220,8 +273,8 @@ class Game {
         let newFood;
         while (true) {
             newFood = {
-                x: Math.floor(Math.random() * this.tileCount),
-                y: Math.floor(Math.random() * this.tileCount)
+                x: Math.floor(Math.random() * this.tileCountX),
+                y: Math.floor(Math.random() * this.tileCountY)
             };
             const collision = this.snake.some(s => s.x === newFood.x && s.y === newFood.y);
             if (!collision) break;
@@ -330,8 +383,8 @@ class Game {
         const type = this.bonusTypes[Math.floor(Math.random() * this.bonusTypes.length)];
         let x, y;
         while (true) {
-            x = Math.floor(Math.random() * this.tileCount);
-            y = Math.floor(Math.random() * this.tileCount);
+            x = Math.floor(Math.random() * this.tileCountX);
+            y = Math.floor(Math.random() * this.tileCountY);
             const inSnake = this.snake.some(s => s.x === x && s.y === y);
             const inFood = this.food.x === x && this.food.y === y;
             const inBonuses = this.bonuses.some(b => b.x === x && b.y === y);
@@ -356,9 +409,9 @@ class Game {
         };
 
         // Collisions
-        if (head.x < 0 || head.x >= this.tileCount || head.y < 0 || head.y >= this.tileCount ||
+        if (head.x < 0 || head.x >= this.tileCountX || head.y < 0 || head.y >= this.tileCountY ||
             this.snake.some(s => s.x === head.x && s.y === head.y)) {
-            this.shakeAmount = 15;
+            this.shakeAmount = this.gridSize * 0.75;
             this.gameOver();
             return;
         }
@@ -367,10 +420,12 @@ class Game {
 
         if (head.x === this.food.x && head.y === this.food.y) {
             this.score += 10;
-            this.shakeAmount = 5;
+            this.trackEaten('food');
+            this.shakeAmount = this.gridSize * 0.25;
             this.createExplosion(
                 head.x * this.gridSize + this.gridSize / 2,
-                head.y * this.gridSize + this.gridSize / 2
+                head.y * this.gridSize + this.gridSize / 2,
+                '#ff0055'
             );
             this.spawnFood();
             this.updateScoreDisplay();
@@ -382,6 +437,7 @@ class Game {
                 const bonus = this.bonuses[i];
                 if (head.x === bonus.x && head.y === bonus.y) {
                     this.score += bonus.points;
+                    this.trackEaten(bonus.id, bonus.color);
                     this.createExplosion(bonus.x * this.gridSize + this.gridSize / 2, bonus.y * this.gridSize + this.gridSize / 2, bonus.color);
                     this.floatingTexts.push({
                         x: bonus.x * this.gridSize + this.gridSize / 2,
@@ -392,7 +448,7 @@ class Game {
                     });
                     this.bonuses.splice(i, 1);
                     this.updateScoreDisplay();
-                    this.shakeAmount = 10;
+                    this.shakeAmount = this.gridSize * 0.5;
                     bonusEaten = true;
                     break;
                 }
@@ -409,10 +465,10 @@ class Game {
 
     createExplosion(x, y, color = '#00f2ff') {
         for (let i = 0; i < 20; i++) {
-            this.particles.push(new Particle(x, y, color));
+            this.particles.push(new Particle(x, y, color, this.gridSize));
         }
         for (let i = 0; i < 10; i++) {
-            this.particles.push(new Particle(x, y, '#ffffff'));
+            this.particles.push(new Particle(x, y, '#ffffff', this.gridSize));
         }
     }
 
@@ -478,84 +534,86 @@ class Game {
 
         switch (bonus.effect) {
             case 'glitch':
-                const offset = Math.sin(time * 10) * 3;
-                this.ctx.fillRect(x - 6 + offset, y - 6, 12, 12);
+                const offset = Math.sin(time * 10) * (this.gridSize * 0.15);
+                this.ctx.fillRect(x - (this.gridSize * 0.3) + offset, y - (this.gridSize * 0.3), this.gridSize * 0.6, this.gridSize * 0.6);
                 this.ctx.fillStyle = '#fff';
-                this.ctx.fillRect(x - 2 - offset, y - 2, 4, 4);
+                this.ctx.fillRect(x - (this.gridSize * 0.1) - offset, y - (this.gridSize * 0.1), this.gridSize * 0.2, this.gridSize * 0.2);
                 break;
             case 'pulse':
                 this.ctx.beginPath();
-                this.ctx.arc(x, y, 7 * pulse, 0, Math.PI * 2);
+                this.ctx.arc(x, y, (this.gridSize * 0.35) * pulse, 0, Math.PI * 2);
                 this.ctx.fill();
                 break;
             case 'sparkle':
                 for (let i = 0; i < 4; i++) {
                     const angle = time + i * Math.PI / 2;
-                    this.ctx.fillRect(x + Math.cos(angle) * 8 - 2, y + Math.sin(angle) * 8 - 2, 4, 4);
+                    this.ctx.fillRect(x + Math.cos(angle) * (this.gridSize * 0.4) - (this.gridSize * 0.1), y + Math.sin(angle) * (this.gridSize * 0.4) - (this.gridSize * 0.1), this.gridSize * 0.2, this.gridSize * 0.2);
                 }
-                this.ctx.fillRect(x - 4, y - 4, 8, 8);
+                this.ctx.fillRect(x - (this.gridSize * 0.2), y - (this.gridSize * 0.2), this.gridSize * 0.4, this.gridSize * 0.4);
                 break;
             case 'ring':
                 this.ctx.beginPath();
-                this.ctx.arc(x, y, 6, 0, Math.PI * 2);
-                this.ctx.lineWidth = 3;
+                this.ctx.arc(x, y, this.gridSize * 0.3, 0, Math.PI * 2);
+                this.ctx.lineWidth = this.gridSize * 0.15;
                 this.ctx.strokeStyle = bonus.color;
                 this.ctx.stroke();
                 this.ctx.beginPath();
-                this.ctx.arc(x, y, 3 * pulse, 0, Math.PI * 2);
+                this.ctx.arc(x, y, (this.gridSize * 0.15) * pulse, 0, Math.PI * 2);
                 this.ctx.fill();
                 break;
             case 'float':
-                const fy = Math.sin(time * 3) * 4;
+                const fy = Math.sin(time * 3) * (this.gridSize * 0.2);
                 this.ctx.beginPath();
-                this.ctx.moveTo(x, y - 8 + fy);
-                this.ctx.lineTo(x + 6, y + fy);
-                this.ctx.lineTo(x, y + 8 + fy);
-                this.ctx.lineTo(x - 6, y + fy);
+                this.ctx.moveTo(x, y - (this.gridSize * 0.4) + fy);
+                this.ctx.lineTo(x + (this.gridSize * 0.3), y + fy);
+                this.ctx.lineTo(x, y + (this.gridSize * 0.4) + fy);
+                this.ctx.lineTo(x - (this.gridSize * 0.3), y + fy);
                 this.ctx.closePath();
                 this.ctx.fill();
                 break;
             case 'fire':
                 for (let i = 0; i < 3; i++) {
-                    const h = 10 + Math.random() * 5;
-                    this.ctx.fillRect(x - 4 + i * 3, y - h / 2, 2, h);
+                    const h = (this.gridSize * 0.5) + Math.random() * (this.gridSize * 0.25);
+                    this.ctx.fillRect(x - (this.gridSize * 0.2) + i * (this.gridSize * 0.15), y - h / 2, this.gridSize * 0.1, h);
                 }
                 break;
             case 'prism':
                 this.ctx.beginPath();
-                this.ctx.moveTo(x, y - 8);
-                this.ctx.lineTo(x + 8, y + 4);
-                this.ctx.lineTo(x - 8, y + 4);
+                this.ctx.moveTo(x, y - (this.gridSize * 0.4));
+                this.ctx.lineTo(x + (this.gridSize * 0.4), y + (this.gridSize * 0.2));
+                this.ctx.lineTo(x - (this.gridSize * 0.4), y + (this.gridSize * 0.2));
                 this.ctx.closePath();
                 this.ctx.fill();
                 break;
             case 'shine':
+                const s1 = this.gridSize * 0.5;
+                const s2 = this.gridSize * 0.1;
                 this.ctx.beginPath();
-                this.ctx.moveTo(x, y - 10);
-                this.ctx.lineTo(x + 2, y - 2);
-                this.ctx.lineTo(x + 10, y);
-                this.ctx.lineTo(x + 2, y + 2);
-                this.ctx.lineTo(x, y + 10);
-                this.ctx.lineTo(x - 2, y + 2);
-                this.ctx.lineTo(x - 10, y);
-                this.ctx.lineTo(x - 2, y - 2);
+                this.ctx.moveTo(x, y - s1);
+                this.ctx.lineTo(x + s2, y - s2);
+                this.ctx.lineTo(x + s1, y);
+                this.ctx.lineTo(x + s2, y + s2);
+                this.ctx.lineTo(x, y + s1);
+                this.ctx.lineTo(x - s2, y + s2);
+                this.ctx.lineTo(x - s1, y);
+                this.ctx.lineTo(x - s2, y - s2);
                 this.ctx.closePath();
                 this.ctx.fill();
                 break;
             case 'vortex':
                 this.ctx.rotate(time * 5);
-                this.ctx.fillRect(-5, -5, 10, 10);
+                this.ctx.fillRect(-(this.gridSize * 0.25), -(this.gridSize * 0.25), this.gridSize * 0.5, this.gridSize * 0.5);
                 break;
             case 'electric':
                 this.ctx.beginPath();
-                this.ctx.moveTo(x - 5, y - 8);
-                this.ctx.lineTo(x + 3, y - 2);
-                this.ctx.lineTo(x - 3, y + 2);
-                this.ctx.lineTo(x + 5, y + 8);
+                this.ctx.moveTo(x - (this.gridSize * 0.25), y - (this.gridSize * 0.4));
+                this.ctx.lineTo(x + (this.gridSize * 0.15), y - (this.gridSize * 0.1));
+                this.ctx.lineTo(x - (this.gridSize * 0.15), y + (this.gridSize * 0.1));
+                this.ctx.lineTo(x + (this.gridSize * 0.25), y + (this.gridSize * 0.4));
                 this.ctx.stroke();
                 break;
             default:
-                this.ctx.fillRect(x - 5, y - 5, 10, 10);
+                this.ctx.fillRect(x - (this.gridSize * 0.25), y - (this.gridSize * 0.25), this.gridSize * 0.5, this.gridSize * 0.5);
         }
 
         this.ctx.restore();
@@ -563,12 +621,12 @@ class Game {
 
     drawFloatingTexts() {
         this.ctx.save();
-        this.ctx.font = 'bold 16px var(--font-display)';
+        this.ctx.font = `bold ${Math.max(12, this.gridSize * 0.8)}px var(--font-display)`;
         this.ctx.textAlign = 'center';
         this.floatingTexts.forEach(text => {
             this.ctx.globalAlpha = text.alpha;
             this.ctx.fillStyle = text.color;
-            this.ctx.shadowBlur = 10;
+            this.ctx.shadowBlur = this.gridSize / 2;
             this.ctx.shadowColor = text.color;
             this.ctx.fillText(text.text, text.x, text.y);
         });
@@ -579,28 +637,30 @@ class Game {
         this.ctx.strokeStyle = 'rgba(0, 242, 255, 0.03)';
         this.ctx.lineWidth = 0.5;
         
-        for (let i = 0; i <= this.tileCount; i++) {
-            // Vertical
+        // Vertical lines
+        for (let i = 0; i <= this.tileCountX; i++) {
             this.ctx.beginPath();
             this.ctx.moveTo(i * this.gridSize, 0);
-            this.ctx.lineTo(i * this.gridSize, this.canvas.height);
+            this.ctx.lineTo(i * this.gridSize, this.canvas.height / this.dpr);
             this.ctx.stroke();
-            
-            // Horizontal
+        }
+        
+        // Horizontal lines
+        for (let i = 0; i <= this.tileCountY; i++) {
             this.ctx.beginPath();
             this.ctx.moveTo(0, i * this.gridSize);
-            this.ctx.lineTo(this.canvas.width, i * this.gridSize);
+            this.ctx.lineTo(this.canvas.width / this.dpr, i * this.gridSize);
             this.ctx.stroke();
         }
     }
 
     drawFood() {
-        const pulse = Math.sin(Date.now() / 150) * 2;
+        const pulse = Math.sin(Date.now() / 150) * (this.gridSize * 0.1);
         const x = this.food.x * this.gridSize + this.gridSize / 2;
         const y = this.food.y * this.gridSize + this.gridSize / 2;
 
         this.ctx.save();
-        this.ctx.shadowBlur = 20 + pulse * 2;
+        this.ctx.shadowBlur = this.gridSize + pulse * 2;
         this.ctx.shadowColor = '#ff0055';
         this.ctx.fillStyle = '#ff0055';
         
@@ -642,7 +702,7 @@ class Game {
             
             // Gradient based on position in snake
             const ratio = 1 - (i / this.snake.length);
-            this.ctx.shadowBlur = isHead ? 25 : 10 * ratio;
+            this.ctx.shadowBlur = isHead ? this.gridSize * 1.25 : this.gridSize * 0.5 * ratio;
             this.ctx.shadowColor = isHead ? '#00f2ff' : '#7000ff';
             
             const grad = this.ctx.createLinearGradient(x, y, x + this.gridSize, y + this.gridSize);
@@ -651,27 +711,29 @@ class Game {
             
             this.ctx.fillStyle = grad;
             
-            const padding = 2;
+            const padding = this.gridSize * 0.1;
             const size = this.gridSize - padding * 2;
-            this.drawRoundedRect(x + padding, y + padding, size, size, isHead ? 6 : 4);
+            this.drawRoundedRect(x + padding, y + padding, size, size, isHead ? this.gridSize * 0.3 : this.gridSize * 0.2);
             
             if (isHead) {
                 // Eyes
                 this.ctx.fillStyle = '#fff';
-                const eyeSize = 3;
-                const offset = 5;
+                const eyeSize = this.gridSize * 0.15;
+                const eyeOffset = this.gridSize * 0.25;
+                const eyePos = this.gridSize * 0.6;
+                
                 if (this.direction.x === 1) {
-                    this.ctx.fillRect(x + 12, y + offset, eyeSize, eyeSize);
-                    this.ctx.fillRect(x + 12, y + 12, eyeSize, eyeSize);
+                    this.ctx.fillRect(x + eyePos, y + eyeOffset, eyeSize, eyeSize);
+                    this.ctx.fillRect(x + eyePos, y + this.gridSize - eyeOffset - eyeSize, eyeSize, eyeSize);
                 } else if (this.direction.x === -1) {
-                    this.ctx.fillRect(x + 5, y + offset, eyeSize, eyeSize);
-                    this.ctx.fillRect(x + 5, y + 12, eyeSize, eyeSize);
+                    this.ctx.fillRect(x + this.gridSize - eyePos - eyeSize, y + eyeOffset, eyeSize, eyeSize);
+                    this.ctx.fillRect(x + this.gridSize - eyePos - eyeSize, y + this.gridSize - eyeOffset - eyeSize, eyeSize, eyeSize);
                 } else if (this.direction.y === -1) {
-                    this.ctx.fillRect(x + 5, y + 5, eyeSize, eyeSize);
-                    this.ctx.fillRect(x + 12, y + 5, eyeSize, eyeSize);
+                    this.ctx.fillRect(x + eyeOffset, y + this.gridSize - eyePos - eyeSize, eyeSize, eyeSize);
+                    this.ctx.fillRect(x + this.gridSize - eyeOffset - eyeSize, y + this.gridSize - eyePos - eyeSize, eyeSize, eyeSize);
                 } else {
-                    this.ctx.fillRect(x + 5, y + 12, eyeSize, eyeSize);
-                    this.ctx.fillRect(x + 12, y + 12, eyeSize, eyeSize);
+                    this.ctx.fillRect(x + eyeOffset, y + eyePos, eyeSize, eyeSize);
+                    this.ctx.fillRect(x + this.gridSize - eyeOffset - eyeSize, y + eyePos, eyeSize, eyeSize);
                 }
             }
             
@@ -692,9 +754,87 @@ class Game {
 
     // --- Data Persistence ---
 
-    updateScoreDisplay() {
-        const formatted = this.score.toString().padStart(3, '0');
-        this.currentScoreEl.textContent = formatted;
+    // --- HUD & Stats ---
+
+    trackEaten(id, color) {
+        if (!this.stats[id]) {
+            this.stats[id] = 0;
+            this.createInventoryItem(id, color);
+        }
+        this.stats[id]++;
+        this.updateInventoryItem(id);
+    }
+
+    createInventoryItem(id, color) {
+        if (!this.inventoryPanel) return;
+        
+        const item = document.createElement('div');
+        item.className = 'inventory-item';
+        item.id = `inv-${id}`;
+        
+        // Use food color if not specified
+        const iconColor = id === 'food' ? '#ff0055' : color;
+        
+        item.innerHTML = `
+            <div class="item-icon" style="background: ${iconColor}; box-shadow: 0 0 10px ${iconColor}"></div>
+            <span class="item-count">x1</span>
+        `;
+        
+        this.inventoryPanel.appendChild(item);
+        
+        // Force reflow for animation
+        item.offsetHeight;
+        item.classList.add('visible');
+    }
+
+    updateInventoryItem(id) {
+        const item = document.getElementById(`inv-${id}`);
+        if (item) {
+            const countEl = item.querySelector('.item-count');
+            countEl.textContent = `x${this.stats[id]}`;
+            
+            // Pulse animation
+            item.classList.remove('pulse');
+            item.offsetHeight; // trigger reflow
+            item.classList.add('pulse');
+        }
+    }
+
+    clearInventory() {
+        if (this.inventoryPanel) {
+            this.inventoryPanel.innerHTML = '';
+        }
+    }
+
+    updateScoreDisplay(reset = false) {
+        if (reset) {
+            this.displayScore = this.score;
+            this.currentScoreEl.textContent = this.score.toString().padStart(3, '0');
+            return;
+        }
+
+        // Animated score increment
+        const start = this.displayScore;
+        const end = this.score;
+        const duration = 500;
+        const startTime = performance.now();
+
+        const animate = (currentTime) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            
+            // Ease out cubic
+            const easeProgress = 1 - Math.pow(1 - progress, 3);
+            this.displayScore = Math.floor(start + (end - start) * easeProgress);
+            
+            this.currentScoreEl.textContent = this.displayScore.toString().padStart(3, '0');
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+
+        requestAnimationFrame(animate);
         
         // Visual glitch effect on update
         this.currentScoreEl.style.animation = 'none';
