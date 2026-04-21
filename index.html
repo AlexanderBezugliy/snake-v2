@@ -25,6 +25,10 @@
                 <div class="title-wrapper">
                     <h1 class="main-title" data-text="SNAKE">SNAKE</h1>
                     <span class="subtitle">NEURAL ENGINE // V1.0</span>
+                    <div class="menu-best-score">
+                        <span class="label">BEST_RECORD:</span>
+                        <span id="menu-best-score-value" class="value">000</span>
+                    </div>
                 </div>
                 <div class="menu-actions">
                     <button id="start-btn" class="primary-btn">
@@ -57,11 +61,6 @@
                         <div class="ui-label inventory-title">COLLECTED_DATA</div>
                         <div id="inventory-stats" class="inventory-grid"></div>
                     </div>
-
-                    <button id="pause-btn" class="ui-icon-btn">
-                        <svg class="pause-icon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-                        <svg class="play-icon" viewBox="0 0 24 24" style="display:none;"><path d="M8 5v14l11-7z"/></svg>
-                    </button>
                 </header>
 
                 <div class="canvas-container">
@@ -79,11 +78,24 @@
 
                 <footer class="game-ui-bottom">
                     <div class="controls-hint">
-                        <span class="key">↑</span>
-                        <span class="key">←</span>
-                        <span class="key">↓</span>
-                        <span class="key">→</span>
+                        <span class="key" id="key-up">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                        </span>
+                        <span class="key" id="key-left">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+                        </span>
+                        <span class="key" id="key-down">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+                        </span>
+                        <span class="key" id="key-right">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        </span>
                         <span class="hint-text">USE NAVIGATION KEYS TO CONTROL</span>
+                        <div class="hint-divider"></div>
+                        <button id="pause-btn" class="ui-icon-btn footer-pause">
+                            <svg class="pause-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 19V5M14 19V5"/></svg>
+                            <svg class="play-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M5 3l14 9-14 9V3z"/></svg>
+                        </button>
                     </div>
                 </footer>
             </div>

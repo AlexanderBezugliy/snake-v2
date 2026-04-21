@@ -244,6 +244,7 @@ class Game {
         this.isGameOver = false;
         this.isPaused = false;
         this.highScores = JSON.parse(localStorage.getItem('snake_highscores_v1')) || [];
+        this.bestScore = parseInt(localStorage.getItem('snakeBestScore')) || 0;
         
         // UI Focus Management
         this.focusManager = new FocusManager();
@@ -257,6 +258,7 @@ class Game {
 
         // DOM Elements for Stats
         this.inventoryPanel = document.getElementById('inventory-stats');
+        this.menuBestScoreValueEl = document.getElementById('menu-best-score-value');
         // Event Listeners
         document.getElementById('start-btn').addEventListener('click', () => this.transitionTo('game'));
         document.getElementById('highscores-btn').addEventListener('click', () => this.showModal('highscores'));
@@ -687,6 +689,9 @@ class Game {
         this.ctx.fillStyle = 'rgba(5, 5, 8, 0.4)';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
+        // Draw field border
+        this.drawFieldBorder();
+
         // Draw background grid
         this.drawGrid();
 
@@ -716,13 +721,14 @@ class Game {
         const lifetimeRatio = bonus.lifetime / 10000;
 
         this.ctx.save();
+        this.ctx.translate(x, y);
         
         // Lifetime indicator (fading ring)
         this.ctx.beginPath();
-        this.ctx.arc(x, y, this.gridSize * 0.8, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * lifetimeRatio));
+        this.ctx.arc(0, 0, this.gridSize * 0.8, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * lifetimeRatio));
         this.ctx.strokeStyle = bonus.color;
         this.ctx.lineWidth = 2;
-        this.ctx.globalAlpha = 0.3;
+        this.ctx.globalAlpha = 0.4 + pulse * 0.1; // Pulsing opacity
         this.ctx.stroke();
 
         // Specific effect based on type
@@ -734,85 +740,150 @@ class Game {
         switch (bonus.effect) {
             case 'glitch':
                 const offset = Math.sin(time * 10) * (this.gridSize * 0.15);
-                this.ctx.fillRect(x - (this.gridSize * 0.3) + offset, y - (this.gridSize * 0.3), this.gridSize * 0.6, this.gridSize * 0.6);
-                this.ctx.fillStyle = '#fff';
-                this.ctx.fillRect(x - (this.gridSize * 0.1) - offset, y - (this.gridSize * 0.1), this.gridSize * 0.2, this.gridSize * 0.2);
+                const glitchColor = Math.random() > 0.5 ? '#fff' : bonus.color;
+                this.ctx.fillStyle = glitchColor;
+                this.ctx.fillRect(-(this.gridSize * 0.3) + offset, -(this.gridSize * 0.3), this.gridSize * 0.6, this.gridSize * 0.6);
+                this.ctx.fillStyle = glitchColor === '#fff' ? bonus.color : '#fff';
+                this.ctx.fillRect(-(this.gridSize * 0.1) - offset, -(this.gridSize * 0.1), this.gridSize * 0.2, this.gridSize * 0.2);
+                // Extra glitch lines
+                if (Math.random() > 0.7) {
+                    this.ctx.fillRect(-(this.gridSize * 0.5), offset, this.gridSize, 1);
+                }
                 break;
             case 'pulse':
-                this.ctx.beginPath();
-                this.ctx.arc(x, y, (this.gridSize * 0.35) * pulse, 0, Math.PI * 2);
-                this.ctx.fill();
+                // Enhanced plasma pulse
+                for (let i = 0; i < 3; i++) {
+                    const s = pulse * (1 - i * 0.2);
+                    this.ctx.beginPath();
+                    this.ctx.arc(0, 0, (this.gridSize * 0.35) * s, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.fillStyle = i === 0 ? bonus.color : '#fff';
+                    this.ctx.globalAlpha = 0.3;
+                }
                 break;
             case 'sparkle':
+                this.ctx.rotate(time);
                 for (let i = 0; i < 4; i++) {
-                    const angle = time + i * Math.PI / 2;
-                    this.ctx.fillRect(x + Math.cos(angle) * (this.gridSize * 0.4) - (this.gridSize * 0.1), y + Math.sin(angle) * (this.gridSize * 0.4) - (this.gridSize * 0.1), this.gridSize * 0.2, this.gridSize * 0.2);
+                    const angle = i * Math.PI / 2;
+                    this.ctx.fillRect(Math.cos(angle) * (this.gridSize * 0.4) - (this.gridSize * 0.1), Math.sin(angle) * (this.gridSize * 0.4) - (this.gridSize * 0.1), this.gridSize * 0.2, this.gridSize * 0.2);
                 }
-                this.ctx.fillRect(x - (this.gridSize * 0.2), y - (this.gridSize * 0.2), this.gridSize * 0.4, this.gridSize * 0.4);
+                this.ctx.fillRect(-(this.gridSize * 0.2), -(this.gridSize * 0.2), this.gridSize * 0.4, this.gridSize * 0.4);
                 break;
             case 'ring':
                 this.ctx.beginPath();
-                this.ctx.arc(x, y, this.gridSize * 0.3, 0, Math.PI * 2);
-                this.ctx.lineWidth = this.gridSize * 0.15;
+                this.ctx.arc(0, 0, this.gridSize * 0.3, 0, Math.PI * 2);
+                this.ctx.lineWidth = this.gridSize * 0.1;
                 this.ctx.strokeStyle = bonus.color;
                 this.ctx.stroke();
+                // Pulsing dot
                 this.ctx.beginPath();
-                this.ctx.arc(x, y, (this.gridSize * 0.15) * pulse, 0, Math.PI * 2);
+                this.ctx.arc(0, 0, (this.gridSize * 0.15) * pulse, 0, Math.PI * 2);
                 this.ctx.fill();
+                // Secondary ring
+                this.ctx.beginPath();
+                this.ctx.arc(0, 0, this.gridSize * 0.45, 0, Math.PI * 2);
+                this.ctx.lineWidth = 1;
+                this.ctx.globalAlpha = 0.5;
+                this.ctx.stroke();
                 break;
             case 'float':
                 const fy = Math.sin(time * 3) * (this.gridSize * 0.2);
                 this.ctx.beginPath();
-                this.ctx.moveTo(x, y - (this.gridSize * 0.4) + fy);
-                this.ctx.lineTo(x + (this.gridSize * 0.3), y + fy);
-                this.ctx.lineTo(x, y + (this.gridSize * 0.4) + fy);
-                this.ctx.lineTo(x - (this.gridSize * 0.3), y + fy);
+                this.ctx.moveTo(0, -(this.gridSize * 0.4) + fy);
+                this.ctx.lineTo(this.gridSize * 0.3, fy);
+                this.ctx.lineTo(0, (this.gridSize * 0.4) + fy);
+                this.ctx.lineTo(-(this.gridSize * 0.3), fy);
+                this.ctx.closePath();
+                this.ctx.fill();
+                // Inner diamond
+                this.ctx.fillStyle = '#fff';
+                this.ctx.beginPath();
+                this.ctx.moveTo(0, -(this.gridSize * 0.2) + fy);
+                this.ctx.lineTo(this.gridSize * 0.15, fy);
+                this.ctx.lineTo(0, (this.gridSize * 0.2) + fy);
+                this.ctx.lineTo(-(this.gridSize * 0.15), fy);
                 this.ctx.closePath();
                 this.ctx.fill();
                 break;
             case 'fire':
-                for (let i = 0; i < 3; i++) {
-                    const h = (this.gridSize * 0.5) + Math.random() * (this.gridSize * 0.25);
-                    this.ctx.fillRect(x - (this.gridSize * 0.2) + i * (this.gridSize * 0.15), y - h / 2, this.gridSize * 0.1, h);
+                for (let i = 0; i < 5; i++) {
+                    const h = (this.gridSize * 0.4) + Math.random() * (this.gridSize * 0.4);
+                    const w = this.gridSize * 0.1;
+                    const fx = -(this.gridSize * 0.3) + i * (this.gridSize * 0.15);
+                    this.ctx.fillStyle = i % 2 === 0 ? bonus.color : '#ffaa00';
+                    this.ctx.fillRect(fx, -h / 2, w, h);
+                    // Add "sparks"
+                    if (Math.random() > 0.8) {
+                        this.ctx.fillStyle = '#fff';
+                        this.ctx.fillRect(fx, -h, 2, 2);
+                    }
                 }
                 break;
             case 'prism':
+                this.ctx.rotate(time);
                 this.ctx.beginPath();
-                this.ctx.moveTo(x, y - (this.gridSize * 0.4));
-                this.ctx.lineTo(x + (this.gridSize * 0.4), y + (this.gridSize * 0.2));
-                this.ctx.lineTo(x - (this.gridSize * 0.4), y + (this.gridSize * 0.2));
+                this.ctx.moveTo(0, -(this.gridSize * 0.4));
+                this.ctx.lineTo(this.gridSize * 0.4, (this.gridSize * 0.2));
+                this.ctx.lineTo(-(this.gridSize * 0.4), (this.gridSize * 0.2));
+                this.ctx.closePath();
+                this.ctx.fill();
+                this.ctx.fillStyle = '#fff';
+                this.ctx.beginPath();
+                this.ctx.moveTo(0, -(this.gridSize * 0.2));
+                this.ctx.lineTo(this.gridSize * 0.2, (this.gridSize * 0.1));
+                this.ctx.lineTo(-(this.gridSize * 0.2), (this.gridSize * 0.1));
                 this.ctx.closePath();
                 this.ctx.fill();
                 break;
             case 'shine':
-                const s1 = this.gridSize * 0.5;
-                const s2 = this.gridSize * 0.1;
+                const s1 = this.gridSize * 0.5 * pulse;
+                const s2 = this.gridSize * 0.1 * pulse;
                 this.ctx.beginPath();
-                this.ctx.moveTo(x, y - s1);
-                this.ctx.lineTo(x + s2, y - s2);
-                this.ctx.lineTo(x + s1, y);
-                this.ctx.lineTo(x + s2, y + s2);
-                this.ctx.lineTo(x, y + s1);
-                this.ctx.lineTo(x - s2, y + s2);
-                this.ctx.lineTo(x - s1, y);
-                this.ctx.lineTo(x - s2, y - s2);
+                this.ctx.moveTo(0, -s1);
+                this.ctx.lineTo(s2, -s2);
+                this.ctx.lineTo(s1, 0);
+                this.ctx.lineTo(s2, s2);
+                this.ctx.lineTo(0, s1);
+                this.ctx.lineTo(-s2, s2);
+                this.ctx.lineTo(-s1, 0);
+                this.ctx.lineTo(-s2, -s2);
                 this.ctx.closePath();
                 this.ctx.fill();
+                this.ctx.fillStyle = '#fff';
+                this.ctx.fillRect(-1, -s1, 2, s1 * 2);
+                this.ctx.fillRect(-s1, -1, s1 * 2, 2);
                 break;
             case 'vortex':
                 this.ctx.rotate(time * 5);
                 this.ctx.fillRect(-(this.gridSize * 0.25), -(this.gridSize * 0.25), this.gridSize * 0.5, this.gridSize * 0.5);
+                // Add second layer for vortex
+                this.ctx.rotate(Math.PI / 4);
+                this.ctx.globalAlpha = 0.5;
+                this.ctx.fillRect(-(this.gridSize * 0.2), -(this.gridSize * 0.2), this.gridSize * 0.4, this.gridSize * 0.4);
                 break;
             case 'electric':
                 this.ctx.beginPath();
-                this.ctx.moveTo(x - (this.gridSize * 0.25), y - (this.gridSize * 0.4));
-                this.ctx.lineTo(x + (this.gridSize * 0.15), y - (this.gridSize * 0.1));
-                this.ctx.lineTo(x - (this.gridSize * 0.15), y + (this.gridSize * 0.1));
-                this.ctx.lineTo(x + (this.gridSize * 0.25), y + (this.gridSize * 0.4));
+                this.ctx.strokeStyle = '#fff';
+                this.ctx.lineWidth = 2;
+                let lastX = -(this.gridSize * 0.3);
+                let lastY = -(this.gridSize * 0.3);
+                this.ctx.moveTo(lastX, lastY);
+                for (let i = 1; i <= 3; i++) {
+                    const nextX = lastX + (this.gridSize * 0.2);
+                    const nextY = lastY + (this.gridSize * 0.2) + (Math.random() - 0.5) * (this.gridSize * 0.4);
+                    this.ctx.lineTo(nextX, nextY);
+                    lastX = nextX;
+                    lastY = nextY;
+                }
                 this.ctx.stroke();
+                // Central glow
+                this.ctx.fillStyle = '#fff';
+                this.ctx.beginPath();
+                this.ctx.arc(0, 0, 2, 0, Math.PI * 2);
+                this.ctx.fill();
                 break;
             default:
-                this.ctx.fillRect(x - (this.gridSize * 0.25), y - (this.gridSize * 0.25), this.gridSize * 0.5, this.gridSize * 0.5);
+                this.ctx.fillRect(-(this.gridSize * 0.25), -(this.gridSize * 0.25), this.gridSize * 0.5, this.gridSize * 0.5);
         }
 
         this.ctx.restore();
@@ -851,6 +922,24 @@ class Game {
             this.ctx.lineTo(this.canvas.width / this.dpr, i * this.gridSize);
             this.ctx.stroke();
         }
+    }
+
+    drawFieldBorder() {
+        this.ctx.save();
+        this.ctx.strokeStyle = 'rgba(0, 242, 255, 0.5)';
+        this.ctx.lineWidth = 2;
+        this.ctx.shadowBlur = 8;
+        this.ctx.shadowColor = 'rgba(0, 242, 255, 0.8)';
+        
+        // Use half of lineWidth to perfectly align with the edge
+        const offset = this.ctx.lineWidth / 2;
+        this.ctx.strokeRect(
+            offset, 
+            offset, 
+            (this.canvas.width / this.dpr) - this.ctx.lineWidth, 
+            (this.canvas.height / this.dpr) - this.ctx.lineWidth
+        );
+        this.ctx.restore();
     }
 
     drawFood() {
@@ -1040,21 +1129,31 @@ class Game {
         this.currentScoreEl.offsetHeight; // trigger reflow
         this.currentScoreEl.style.animation = 'glitch-1 0.3s var(--ease-out-expo)';
 
-        const best = this.highScores.length > 0 ? this.highScores[0] : 0;
-        this.bestScoreEl.textContent = Math.max(this.score, best).toString().padStart(3, '0');
+        this.bestScoreEl.textContent = Math.max(this.score, this.bestScore).toString().padStart(3, '0');
     }
 
     updateBestScoreDisplay() {
-        const best = this.highScores.length > 0 ? this.highScores[0] : 0;
-        this.bestScoreEl.textContent = best.toString().padStart(3, '0');
+        this.bestScoreEl.textContent = this.bestScore.toString().padStart(3, '0');
+        if (this.menuBestScoreValueEl) {
+            this.menuBestScoreValueEl.textContent = this.bestScore.toString().padStart(3, '0');
+        }
     }
 
     saveScore(score) {
         if (score <= 0) return;
+        
+        // Update classic highscores
         this.highScores.push(score);
         this.highScores.sort((a, b) => b - a);
         this.highScores = this.highScores.slice(0, 5);
         localStorage.setItem('snake_highscores_v1', JSON.stringify(this.highScores));
+
+        // Update single best score if necessary
+        if (score > this.bestScore) {
+            this.bestScore = score;
+            localStorage.setItem('snakeBestScore', this.bestScore.toString());
+            this.updateBestScoreDisplay();
+        }
     }
 
     renderHighscores() {
