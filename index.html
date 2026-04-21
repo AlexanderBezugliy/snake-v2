@@ -1,18 +1,122 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Snake</title>
-    
+    <title>SNAKE // DIGITAL EDITION</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Outfit:wght@100..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <script src="./script.js" defer></script>
 </head>
-
 <body>
-    <h1>Snake</h1>
+    <!-- Background layers -->
+    <div id="app-background">
+        <div class="glow-sphere sphere-1"></div>
+        <div class="glow-sphere sphere-2"></div>
+        <div class="noise-overlay"></div>
+    </div>
 
-    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <!-- Main Container -->
+    <main id="app-container">
+        <!-- Главное меню -->
+        <section id="menu-screen" class="screen active">
+            <div class="menu-content">
+                <div class="title-wrapper">
+                    <h1 class="main-title" data-text="SNAKE">SNAKE</h1>
+                    <span class="subtitle">NEURAL ENGINE // V1.0</span>
+                </div>
+                <div class="menu-actions">
+                    <button id="start-btn" class="primary-btn">
+                        <span class="btn-text">INITIALIZE GAME</span>
+                        <span class="btn-glitch"></span>
+                    </button>
+                    <button id="highscores-btn" class="secondary-btn">
+                        <span class="btn-text">DATA ARCHIVE</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Игровой экран -->
+        <section id="game-screen" class="screen">
+            <div class="game-layout">
+                <header class="game-ui-top">
+                    <div class="ui-panel score-panel">
+                        <span class="ui-label">CURRENT_SCORE</span>
+                        <span id="current-score" class="ui-value">000</span>
+                    </div>
+                    <div class="ui-panel best-panel">
+                        <span class="ui-label">BEST_RECORD</span>
+                        <span id="best-score" class="ui-value">000</span>
+                    </div>
+                    <button id="pause-btn" class="ui-icon-btn">
+                        <svg class="pause-icon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                        <svg class="play-icon" viewBox="0 0 24 24" style="display:none;"><path d="M8 5v14l11-7z"/></svg>
+                    </button>
+                </header>
+
+                <div class="canvas-container">
+                    <div class="canvas-border">
+                        <canvas id="game-canvas"></canvas>
+                    </div>
+                    <div id="pause-overlay" class="pause-overlay">
+                        <div class="pause-content">
+                            <h2 class="pause-title">PAUSED</h2>
+                            <button id="resume-btn" class="primary-btn small">CONTINUE</button>
+                        </div>
+                    </div>
+                    <div class="scanline"></div>
+                </div>
+
+                <footer class="game-ui-bottom">
+                    <div class="controls-hint">
+                        <span class="key">↑</span>
+                        <span class="key">←</span>
+                        <span class="key">↓</span>
+                        <span class="key">→</span>
+                        <span class="hint-text">USE NAVIGATION KEYS TO CONTROL</span>
+                    </div>
+                </footer>
+            </div>
+        </section>
+    </main>
+
+    <!-- Модальные окна (Glassmorphism) -->
+    <div id="highscores-modal" class="modal-overlay">
+        <div class="modal-window glass-card">
+            <div class="modal-header">
+                <h2>RANKING_SYSTEM</h2>
+                <div class="header-line"></div>
+            </div>
+            <div class="modal-body">
+                <ul id="highscores-list" class="scores-list"></ul>
+            </div>
+            <div class="modal-footer">
+                <button id="close-highscores" class="modal-btn">RETURN</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="gameover-modal" class="modal-overlay">
+        <div class="modal-window glass-card critical">
+            <div class="modal-header">
+                <h2 class="critical-text">CONNECTION_LOST</h2>
+                <div class="header-line"></div>
+            </div>
+            <div class="modal-body">
+                <div class="final-score-display">
+                    <span class="label">FINAL_RESULT</span>
+                    <span id="final-score" class="value">0</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="restart-btn" class="primary-btn small">REBOOT</button>
+                <button id="main-menu-btn" class="secondary-btn small">DISCONNECT</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
 </body>
-
 </html>
